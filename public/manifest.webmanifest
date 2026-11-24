@@ -1,0 +1,17 @@
+{
+  "name": "Jerbz FieldScope — Hybrid AI Jobsite Estimator",
+  "short_name": "FieldScope",
+  "description": "Offline-first field service jobsite estimator powered by Firebase AI Logic Hybrid Inference (Gemini Nano on-device + Cloud Gemini fallback).",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d131a",
+  "theme_color": "#f59e0b",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
