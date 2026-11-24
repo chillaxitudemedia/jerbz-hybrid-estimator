@@ -153,7 +153,7 @@ export default function App() {
 
   const totals = useMemo(() => {
     if (!estimate) return { materials: 0, labor: 0, grand: 0 };
-    const materials = estimate.materials.reduce((sum, m) => sum + m.ukupno, 0);
+    const materials = estimate.materials.reduce((sum, m) => sum + m.lineTotal, 0);
     const labor = estimate.estimatedLaborHours * estimate.laborRatePerHour;
     return { materials, labor, grand: materials + labor };
   }, [estimate]);
@@ -292,7 +292,7 @@ export default function App() {
         const now = new Date().toISOString();
         if (!prev) {
           return {
-            id: `poso-${Date.now()}`,
+            id: `est-${Date.now()}`,
             createdAt: now,
             updatedAt: now,
             title: vendorName ? `${vendorName} Supply Estimate` : 'Scanned Receipt Estimate',
@@ -331,7 +331,7 @@ export default function App() {
 
   const handleUpdateMaterial = (
     id: string,
-    field: keyof Pick<MaterialItem, 'naziv' | 'kolicina' | 'jedinica' | 'jedinicnaCijena'>,
+    field: keyof Pick<MaterialItem, 'name' | 'quantity' | 'unit' | 'unitPrice'>,
     value: string
   ) => {
     setEstimate((prev) => {
@@ -343,11 +343,11 @@ export default function App() {
           const next = {
             ...item,
             [field]:
-              field === 'kolicina' || field === 'jedinicnaCijena'
+              field === 'quantity' || field === 'unitPrice'
                 ? Number(value) || 0
                 : value,
           };
-          next.ukupno = Number((next.kolicina * next.jedinicnaCijena).toFixed(2));
+          next.lineTotal = Number((next.quantity * next.unitPrice).toFixed(2));
           return next;
         }),
       };
@@ -363,11 +363,11 @@ export default function App() {
           ...prev.materials,
           {
             id: `mat-${Date.now()}`,
-            naziv: 'New Material',
-            kolicina: 1,
-            jedinica: 'pcs',
-            jedinicnaCijena: 0,
-            ukupno: 0,
+            name: 'New Material',
+            quantity: 1,
+            unit: 'pcs',
+            unitPrice: 0,
+            lineTotal: 0,
           },
         ],
       };
@@ -421,7 +421,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${estimate.id}-jerbz-poso.json`;
+    a.download = `${estimate.id}-jerbz-estimate.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -684,7 +684,7 @@ export default function App() {
             ) : (
               <div className="saved-list">
                 {savedEstimates.map((item) => {
-                  const matTotal = item.materials.reduce((s, m) => s + m.ukupno, 0);
+                  const matTotal = item.materials.reduce((s, m) => s + m.lineTotal, 0);
                   const grand =
                     matTotal + item.estimatedLaborHours * item.laborRatePerHour;
                   return (
@@ -848,7 +848,7 @@ export default function App() {
 
                 <div className="card-header">
                   <span style={{ fontWeight: 700, fontSize: '0.86rem' }}>
-                    Itemized Materials (Jerbz StavkaMaterijala Schema)
+                    Itemized Materials
                   </span>
                   <button
                     type="button"
@@ -877,9 +877,9 @@ export default function App() {
                           <td>
                             <input
                               className="inline-input"
-                              value={item.naziv}
+                              value={item.name}
                               onChange={(e) =>
-                                handleUpdateMaterial(item.id, 'naziv', e.target.value)
+                                handleUpdateMaterial(item.id, 'name', e.target.value)
                               }
                             />
                           </td>
@@ -889,11 +889,11 @@ export default function App() {
                               type="number"
                               min={0}
                               step={0.5}
-                              value={item.kolicina}
+                              value={item.quantity}
                               onChange={(e) =>
                                 handleUpdateMaterial(
                                   item.id,
-                                  'kolicina',
+                                  'quantity',
                                   e.target.value
                                 )
                               }
@@ -902,11 +902,11 @@ export default function App() {
                           <td>
                             <input
                               className="inline-input"
-                              value={item.jedinica}
+                              value={item.unit}
                               onChange={(e) =>
                                 handleUpdateMaterial(
                                   item.id,
-                                  'jedinica',
+                                  'unit',
                                   e.target.value
                                 )
                               }
@@ -918,24 +918,24 @@ export default function App() {
                               type="number"
                               min={0}
                               step={0.5}
-                              value={item.jedinicnaCijena}
+                              value={item.unitPrice}
                               onChange={(e) =>
                                 handleUpdateMaterial(
                                   item.id,
-                                  'jedinicnaCijena',
+                                  'unitPrice',
                                   e.target.value
                                 )
                               }
                             />
                           </td>
                           <td className="num" style={{ fontWeight: 700 }}>
-                            ${item.ukupno.toFixed(2)}
+                            ${item.lineTotal.toFixed(2)}
                           </td>
                           <td>
                             <button
                               type="button"
                               className="btn btn-sm"
-                              aria-label={`Remove ${item.naziv}`}
+                              aria-label={`Remove ${item.name}`}
                               onClick={() => handleDeleteMaterial(item.id)}
                             >
                               <Trash2 size={12} />

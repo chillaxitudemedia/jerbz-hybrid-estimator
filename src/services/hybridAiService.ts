@@ -47,12 +47,12 @@ const JOB_ESTIMATE_JSON_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          naziv: { type: 'string' },
-          kolicina: { type: 'number' },
-          jedinica: { type: 'string' },
-          jedinicnaCijena: { type: 'number' },
+          name: { type: 'string' },
+          quantity: { type: 'number' },
+          unit: { type: 'string' },
+          unitPrice: { type: 'number' },
         },
-        required: ['naziv', 'kolicina', 'jedinica', 'jedinicnaCijena'],
+        required: ['name', 'quantity', 'unit', 'unitPrice'],
       },
     },
     recommendedNextSteps: {
@@ -81,12 +81,12 @@ const RECEIPT_JSON_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          naziv: { type: 'string' },
-          kolicina: { type: 'number' },
-          jedinica: { type: 'string' },
-          jedinicnaCijena: { type: 'number' },
+          name: { type: 'string' },
+          quantity: { type: 'number' },
+          unit: { type: 'string' },
+          unitPrice: { type: 'number' },
         },
-        required: ['naziv', 'kolicina', 'jedinica', 'jedinicnaCijena'],
+        required: ['name', 'quantity', 'unit', 'unitPrice'],
       },
     },
   },
@@ -236,24 +236,24 @@ export async function extractJobScopeHybrid(params: {
     estimatedLaborHours?: number;
     priority?: JobEstimate['priority'];
     materials?: Array<{
-      naziv?: string;
-      kolicina?: number;
-      jedinica?: string;
-      jedinicnaCijena?: number;
+      name?: string;
+      quantity?: number;
+      unit?: string;
+      unitPrice?: number;
     }>;
     recommendedNextSteps?: string[];
   };
 
   const materials: MaterialItem[] = (parsed.materials ?? []).map((item, idx) => {
-    const qty = Number(item.kolicina) || 1;
-    const unitPrice = Number(item.jedinicnaCijena) || 0;
+    const qty = Number(item.quantity) || 1;
+    const unitPrice = Number(item.unitPrice) || 0;
     return {
       id: `mat-${Date.now()}-${idx}`,
-      naziv: item.naziv || 'Material Item',
-      kolicina: qty,
-      jedinica: item.jedinica || 'pcs',
-      jedinicnaCijena: unitPrice,
-      ukupno: Number((qty * unitPrice).toFixed(2)),
+      name: item.name || 'Material Item',
+      quantity: qty,
+      unit: item.unit || 'pcs',
+      unitPrice,
+      lineTotal: Number((qty * unitPrice).toFixed(2)),
     };
   });
 
@@ -275,7 +275,7 @@ export async function extractJobScopeHybrid(params: {
 
   const now = new Date().toISOString();
   const estimate: JobEstimate = {
-    id: `poso-${Date.now()}`,
+    id: `est-${Date.now()}`,
     createdAt: now,
     updatedAt: now,
     title: parsed.title || 'Field Service Estimate',
@@ -307,7 +307,7 @@ export async function draftClientQuoteStreamHybrid(params: {
   assertCloudAllowedIfNeeded(params.mode);
 
   const materialsSubtotal = params.estimate.materials.reduce(
-    (sum, m) => sum + m.ukupno,
+    (sum, m) => sum + m.lineTotal,
     0
   );
   const laborSubtotal =
@@ -444,23 +444,23 @@ export async function scanReceiptHybrid(params: {
   const parsed = JSON.parse(stripMarkdownFences(result.response.text())) as {
     vendorName?: string;
     items?: Array<{
-      naziv?: string;
-      kolicina?: number;
-      jedinica?: string;
-      jedinicnaCijena?: number;
+      name?: string;
+      quantity?: number;
+      unit?: string;
+      unitPrice?: number;
     }>;
   };
 
   const items: MaterialItem[] = (parsed.items ?? []).map((item, idx) => {
-    const qty = Number(item.kolicina) || 1;
-    const unitPrice = Number(item.jedinicnaCijena) || 0;
+    const qty = Number(item.quantity) || 1;
+    const unitPrice = Number(item.unitPrice) || 0;
     return {
       id: `rcpt-${Date.now()}-${idx}`,
-      naziv: item.naziv || 'Supply Item',
-      kolicina: qty,
-      jedinica: item.jedinica || 'pcs',
-      jedinicnaCijena: unitPrice,
-      ukupno: Number((qty * unitPrice).toFixed(2)),
+      name: item.name || 'Supply Item',
+      quantity: qty,
+      unit: item.unit || 'pcs',
+      unitPrice,
+      lineTotal: Number((qty * unitPrice).toFixed(2)),
     };
   });
 

@@ -42,12 +42,12 @@ export function saveTelemetryLog(log: InferenceTelemetry[]): void {
 }
 
 /**
- * Exports an estimate in a JSON structure directly compatible with
- * Jerbz Enterprise / Standard Edition (`Poso` + `StavkaMaterijala`).
+ * Exports an estimate in a clean structured JSON payload ready for import
+ * into the Jerbz commercial field-service platform.
  */
 export function buildJerbzExportPayload(estimate: JobEstimate) {
   const materialsSubtotal = estimate.materials.reduce(
-    (sum, item) => sum + item.ukupno,
+    (sum, item) => sum + item.lineTotal,
     0
   );
   const laborSubtotal =
@@ -55,32 +55,32 @@ export function buildJerbzExportPayload(estimate: JobEstimate) {
   const totalEstimate = materialsSubtotal + laborSubtotal;
 
   return {
-    schema: 'jerbz.poso.v1',
+    schema: 'jerbz.estimate.v1',
     exportedAt: new Date().toISOString(),
     sourceApp: 'jerbz-hybrid-estimator',
-    poso: {
+    estimate: {
       id: estimate.id,
-      nazivPosla: estimate.title,
-      opisPosla: estimate.jobDescription,
-      klijent: estimate.clientName,
-      lokacija: estimate.siteLocation,
-      kategorija: estimate.tradeCategory,
-      prioritet: estimate.priority,
-      procijenjeniDani: estimate.estimatedDurationDays,
-      satiRada: estimate.estimatedLaborHours,
-      satnicaUsd: estimate.laborRatePerHour,
-      ukupnoMaterijalUsd: Number(materialsSubtotal.toFixed(2)),
-      ukupnoRadUsd: Number(laborSubtotal.toFixed(2)),
-      ukupnaVrijednostUsd: Number(totalEstimate.toFixed(2)),
-      stavkeMaterijala: estimate.materials.map((m) => ({
-        naziv: m.naziv,
-        kolicina: m.kolicina,
-        jedinica: m.jedinica,
-        jedinicnaCijena: m.jedinicnaCijena,
-        ukupno: m.ukupno,
+      jobTitle: estimate.title,
+      jobDescription: estimate.jobDescription,
+      clientName: estimate.clientName,
+      siteLocation: estimate.siteLocation,
+      tradeCategory: estimate.tradeCategory,
+      priority: estimate.priority,
+      estimatedDurationDays: estimate.estimatedDurationDays,
+      laborHours: estimate.estimatedLaborHours,
+      laborRateUsd: estimate.laborRatePerHour,
+      materialsSubtotalUsd: Number(materialsSubtotal.toFixed(2)),
+      laborSubtotalUsd: Number(laborSubtotal.toFixed(2)),
+      totalEstimateUsd: Number(totalEstimate.toFixed(2)),
+      materials: estimate.materials.map((m) => ({
+        name: m.name,
+        quantity: m.quantity,
+        unit: m.unit,
+        unitPriceUsd: m.unitPrice,
+        lineTotalUsd: m.lineTotal,
       })),
-      preporuceniKoraci: estimate.recommendedNextSteps,
-      klijentskaPonuda: estimate.clientQuoteDraft ?? '',
+      recommendedNextSteps: estimate.recommendedNextSteps,
+      clientQuoteDraft: estimate.clientQuoteDraft ?? '',
       aiTelemetry: estimate.lastInference ?? null,
     },
   };

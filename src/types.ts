@@ -14,22 +14,16 @@ export type NanoStatus =
   | 'unsupported'
   | 'checking';
 
-/**
- * Compatible with Jerbz commercial schema (`StavkaMaterijala`).
- */
 export interface MaterialItem {
   id: string;
-  naziv: string; // Material / part name
-  kolicina: number; // Quantity
-  jedinica: string; // Unit (pcs, ft, box, gal, hr, lot)
-  jedinicnaCijena: number; // Unit price in USD
-  ukupno: number; // Line total (kolicina * jedinicnaCijena)
+  name: string;
+  quantity: number;
+  unit: string; // pcs, ft, box, gal, hr, lot
+  unitPrice: number; // USD
+  lineTotal: number; // quantity * unitPrice
   category?: string;
 }
 
-/**
- * Compatible with Jerbz commercial schema (`Poso` job estimate).
- */
 export interface JobEstimate {
   id: string;
   createdAt: string;

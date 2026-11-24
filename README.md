@@ -2,7 +2,7 @@
 
 **Offline-first field service jobsite estimator powered by Firebase AI Logic Hybrid Inference (On-Device Gemini Nano + Cloud Gemini 2.5 Flash fallback).**
 
-Built for the **#BuildHybridAI 2026 — Firebase Hybrid AI Hackathon** and architected as an open-source (Apache-2.0) companion module compatible with the **Jerbz™** commercial field-service management platform (`jerbz.poso.v1` / `StavkaMaterijala` JSON schema).
+Built for the **#BuildHybridAI 2026 — Firebase Hybrid AI Hackathon** and architected as an open-source (Apache-2.0) companion module compatible with the **Jerbz™** commercial field-service management platform (`jerbz.estimate.v1` JSON schema).
 
 ---
 
@@ -21,7 +21,7 @@ HVAC technicians, electricians, and plumbers routinely work in **sub-basements, 
 4. **Live Hybrid Telemetry & ROI Ledger**
    - Displays real-time `result.response.inferenceSource` (`ON_DEVICE` vs `IN_CLOUD`), latency (ms), network status (`Online` vs `Offline (Dead Zone)`), and cumulative cloud spend avoided.
 5. **Offline-First PWA & Jerbz Schema Export**
-   - Persists estimates offline (LocalStorage + Firestore persistent local cache when configured) and exports `jerbz.poso.v1` JSON directly compatible with Jerbz Enterprise & Standard Edition.
+   - Persists estimates offline (LocalStorage + Firestore persistent local cache when configured) and exports `jerbz.estimate.v1` JSON directly compatible with Jerbz Enterprise & Standard Edition.
 
 ---
 
@@ -35,7 +35,7 @@ flowchart LR
   SDK -- "Automatic Fallback / Multimodal Cloud" --> AppCheck["Firebase App Check (reCAPTCHA Enterprise)"]
   AppCheck --> Cloud["Cloud Gemini 2.5 Flash (GoogleAIBackend)"]
   UI --> Store["Offline-First Ledger (LocalStorage + Firestore Persistent Cache)"]
-  UI --> Export["Jerbz Commercial Schema Export (jerbz.poso.v1)"]
+  UI --> Export["Jerbz Commercial Schema Export (jerbz.estimate.v1)"]
 ```
 
 ---
@@ -86,7 +86,7 @@ npm run dev
 3. **Offline On-Device Extraction**: Select the **HVAC Rooftop Compressor** preset and click **Extract Scope & Materials**. Watch the badge show `⚡ ON_DEVICE • $0.00` with structured materials and totals populated completely offline.
 4. **Offline Streaming Client Quote**: Click **Draft Client Quote (Stream)** — streams locally with Gemini Nano.
 5. **Back Online → Multimodal Cloud Fallback**: Re-enable network, switch to `PREFER_IN_CLOUD` (or upload a supply-house receipt photo), and watch Firebase AI Logic seamlessly route to `☁️ IN_CLOUD (gemini-2.5-flash)` while the Telemetry Log tracks both edge and cloud runs.
-6. **Export to Jerbz**: Click **Export Jerbz JSON** to download the `jerbz.poso.v1` payload ready for Jerbz Enterprise / Standard Edition.
+6. **Export to Jerbz**: Click **Export Jerbz JSON** to download the `jerbz.estimate.v1` payload ready for Jerbz Enterprise / Standard Edition.
 
 ---
 
