@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jerbz-fieldscope-v1';
+const CACHE_NAME = 'jerbz-fieldscope-v2';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -26,6 +26,24 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Network-first for HTML navigation so fresh deploys load immediately when online,
+  // falling back to cache cleanly when offline (dead zone / Airplane Mode).
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // Stale-while-revalidate for static assets (hashed JS/CSS/icons)
   event.respondWith(
     caches.match(request).then((cached) => {
       const networkFetch = fetch(request)
