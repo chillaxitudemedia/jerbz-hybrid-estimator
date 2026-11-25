@@ -2,6 +2,7 @@ import {
   getGenerativeModel,
   InferenceMode,
   InferenceSource,
+  ThinkingLevel,
   type HybridParams,
   type InlineDataPart,
   type TextPart,
@@ -181,28 +182,36 @@ function assertCloudAllowedIfNeeded(mode: HybridModeKey) {
   }
 }
 
-async function withTransientRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries = 2
-): Promise<T> {
+const CLOUD_FALLBACK_MODELS = Array.from(
+  new Set([CLOUD_GEMINI_MODEL, 'gemini-3.6-flash', 'gemini-3.5-flash-lite'])
+);
+
+async function runWithCloudModelFallback<T>(
+  mode: HybridModeKey,
+  runForModel: (cloudModelName: string) => Promise<T>
+): Promise<{ result: T; cloudModelUsed: string }> {
+  const candidates =
+    mode === 'ONLY_ON_DEVICE' ? [CLOUD_GEMINI_MODEL] : CLOUD_FALLBACK_MODELS;
   let lastError: unknown;
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+
+  for (let i = 0; i < candidates.length; i += 1) {
+    const candidate = candidates[i];
     try {
-      return await fn();
+      const result = await runForModel(candidate);
+      return { result, cloudModelUsed: candidate };
     } catch (err) {
       lastError = err;
       const msg = err instanceof Error ? err.message : String(err);
-      const isTransient =
+      const isRetryable =
         msg.includes('[500') ||
         msg.includes('[503') ||
+        msg.includes('[404') ||
         msg.includes('high demand') ||
-        msg.includes('temporarily');
-      if (!isTransient || attempt === maxRetries) {
+        msg.includes('timed out') ||
+        msg.includes('timeout');
+      if (!isRetryable || i === candidates.length - 1) {
         throw err;
       }
-      await new Promise((resolve) =>
-        setTimeout(resolve, 1500 * (attempt + 1))
-      );
     }
   }
   throw lastError;
@@ -217,29 +226,6 @@ export async function extractJobScopeHybrid(params: {
 }): Promise<{ estimate: JobEstimate; telemetry: InferenceTelemetry }> {
   assertCloudAllowedIfNeeded(params.mode);
 
-  const hybridParams: HybridParams = {
-    mode: MODE_MAP[params.mode],
-    onDeviceParams: {
-      createOptions: {
-        expectedInputs: [{ type: 'text', languages: ['en'] }],
-        expectedOutputs: [{ type: 'text', languages: ['en'] }],
-      },
-      promptOptions: {
-        responseConstraint: JOB_ESTIMATE_JSON_SCHEMA,
-      },
-    },
-    inCloudParams: {
-      model: CLOUD_GEMINI_MODEL,
-      systemInstruction:
-        'You are a senior field-service trade estimator for Jerbz. Convert messy contractor jobsite notes into clean, accurate structured JSON with itemized materials, quantities, units, unit prices in USD, labor hours, and next steps.',
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseJsonSchema: JOB_ESTIMATE_JSON_SCHEMA,
-      },
-    },
-  };
-
-  const model = getGenerativeModel(ai, hybridParams);
   const prompt = [
     'Extract a structured jobsite estimate as JSON from the field notes below.',
     'Use exact prices mentioned in the notes; if a price is not mentioned, estimate a realistic US contractor supply price.',
@@ -250,7 +236,35 @@ export async function extractJobScopeHybrid(params: {
   ].join('\n');
 
   const startedAt = performance.now();
-  const result = await withTransientRetry(() => model.generateContent(prompt));
+  const { result, cloudModelUsed } = await runWithCloudModelFallback(
+    params.mode,
+    (cloudModelName) => {
+      const hybridParams: HybridParams = {
+        mode: MODE_MAP[params.mode],
+        onDeviceParams: {
+          createOptions: {
+            expectedInputs: [{ type: 'text', languages: ['en'] }],
+            expectedOutputs: [{ type: 'text', languages: ['en'] }],
+          },
+          promptOptions: {
+            responseConstraint: JOB_ESTIMATE_JSON_SCHEMA,
+          },
+        },
+        inCloudParams: {
+          model: cloudModelName,
+          systemInstruction:
+            'You are a senior field-service trade estimator for Jerbz. Convert messy contractor jobsite notes into clean, accurate structured JSON with itemized materials, quantities, units, unit prices in USD, labor hours, and next steps.',
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseJsonSchema: JOB_ESTIMATE_JSON_SCHEMA,
+            thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+          },
+        },
+      };
+      const model = getGenerativeModel(ai, hybridParams, { timeout: 20000 });
+      return model.generateContent(prompt);
+    }
+  );
   const latencyMs = Math.round(performance.now() - startedAt);
 
   const source = mapInferenceSource(result.response.inferenceSource);
@@ -293,7 +307,7 @@ export async function extractJobScopeHybrid(params: {
     modelLabel:
       source === 'ON_DEVICE'
         ? 'Gemini Nano (Chrome Built-in)'
-        : CLOUD_GEMINI_MODEL,
+        : cloudModelUsed,
     latencyMs,
     estimatedCloudCostSavedUsd:
       source === 'ON_DEVICE' ? EST_CLOUD_COST_PER_SCOPE_USD : 0,
@@ -341,21 +355,6 @@ export async function draftClientQuoteStreamHybrid(params: {
     params.estimate.estimatedLaborHours * params.estimate.laborRatePerHour;
   const total = materialsSubtotal + laborSubtotal;
 
-  const model = getGenerativeModel(ai, {
-    mode: MODE_MAP[params.mode],
-    onDeviceParams: {
-      createOptions: {
-        expectedInputs: [{ type: 'text', languages: ['en'] }],
-        expectedOutputs: [{ type: 'text', languages: ['en'] }],
-      },
-    },
-    inCloudParams: {
-      model: CLOUD_GEMINI_MODEL,
-      systemInstruction:
-        'You write crisp, trustworthy, SMS/email-ready job quotes for field service contractors. Keep it under 140 words, clear pricing breakdown, polite call to approve.',
-    },
-  });
-
   const prompt = [
     'Write a concise client-ready quote message (under 140 words) for SMS or email.',
     `Client: ${params.estimate.clientName}`,
@@ -370,13 +369,41 @@ export async function draftClientQuoteStreamHybrid(params: {
   ].join('\n');
 
   const startedAt = performance.now();
-  const streamResult = await model.generateContentStream(prompt);
-  let accumulated = '';
-  for await (const chunk of streamResult.stream) {
-    accumulated += chunk.text();
-    params.onChunk(accumulated);
-  }
-  const finalResponse = await streamResult.response;
+  const { result: streamed, cloudModelUsed } = await runWithCloudModelFallback(
+    params.mode,
+    async (cloudModelName) => {
+      const model = getGenerativeModel(
+        ai,
+        {
+          mode: MODE_MAP[params.mode],
+          onDeviceParams: {
+            createOptions: {
+              expectedInputs: [{ type: 'text', languages: ['en'] }],
+              expectedOutputs: [{ type: 'text', languages: ['en'] }],
+            },
+          },
+          inCloudParams: {
+            model: cloudModelName,
+            systemInstruction:
+              'You write crisp, trustworthy, SMS/email-ready job quotes for field service contractors. Keep it under 140 words, clear pricing breakdown, polite call to approve.',
+            generationConfig: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+            },
+          },
+        },
+        { timeout: 20000 }
+      );
+      const streamResult = await model.generateContentStream(prompt);
+      let acc = '';
+      for await (const chunk of streamResult.stream) {
+        acc += chunk.text();
+        params.onChunk(acc);
+      }
+      const finalResponse = await streamResult.response;
+      return { accumulated: acc, finalResponse };
+    }
+  );
+  const { accumulated, finalResponse } = streamed;
   const latencyMs = Math.round(performance.now() - startedAt);
   const source = mapInferenceSource(finalResponse.inferenceSource);
 
@@ -389,7 +416,7 @@ export async function draftClientQuoteStreamHybrid(params: {
     modelLabel:
       source === 'ON_DEVICE'
         ? 'Gemini Nano (Chrome Built-in)'
-        : CLOUD_GEMINI_MODEL,
+        : cloudModelUsed,
     latencyMs,
     estimatedCloudCostSavedUsd:
       source === 'ON_DEVICE' ? EST_CLOUD_COST_PER_QUOTE_USD : 0,
@@ -425,31 +452,6 @@ export async function scanReceiptHybrid(params: {
   const base64Data = await fileToBase64(params.file);
   const mimeType = params.file.type || 'image/jpeg';
 
-  const model = getGenerativeModel(ai, {
-    mode: MODE_MAP[params.mode],
-    onDeviceParams: {
-      createOptions: {
-        expectedInputs: [
-          { type: 'image' },
-          { type: 'text', languages: ['en'] },
-        ],
-        expectedOutputs: [{ type: 'text', languages: ['en'] }],
-      },
-      promptOptions: {
-        responseConstraint: RECEIPT_JSON_SCHEMA,
-      },
-    },
-    inCloudParams: {
-      model: CLOUD_GEMINI_MODEL,
-      systemInstruction:
-        'Extract purchased contractor materials from this supply-house receipt or parts list photo as structured JSON.',
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseJsonSchema: RECEIPT_JSON_SCHEMA,
-      },
-    },
-  });
-
   const textPart: TextPart = {
     type: 'text',
     text: 'Extract every line item (name, quantity, unit, unit price in USD) and the vendor name from this receipt or parts sheet as JSON.',
@@ -464,8 +466,40 @@ export async function scanReceiptHybrid(params: {
   };
 
   const startedAt = performance.now();
-  const result = await withTransientRetry(() =>
-    model.generateContent([textPart, imagePart])
+  const { result, cloudModelUsed } = await runWithCloudModelFallback(
+    params.mode,
+    (cloudModelName) => {
+      const model = getGenerativeModel(
+        ai,
+        {
+          mode: MODE_MAP[params.mode],
+          onDeviceParams: {
+            createOptions: {
+              expectedInputs: [
+                { type: 'image' },
+                { type: 'text', languages: ['en'] },
+              ],
+              expectedOutputs: [{ type: 'text', languages: ['en'] }],
+            },
+            promptOptions: {
+              responseConstraint: RECEIPT_JSON_SCHEMA,
+            },
+          },
+          inCloudParams: {
+            model: cloudModelName,
+            systemInstruction:
+              'Extract purchased contractor materials from this supply-house receipt or parts list photo as structured JSON.',
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseJsonSchema: RECEIPT_JSON_SCHEMA,
+              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+            },
+          },
+        },
+        { timeout: 25000 }
+      );
+      return model.generateContent([textPart, imagePart]);
+    }
   );
   const latencyMs = Math.round(performance.now() - startedAt);
   const source = mapInferenceSource(result.response.inferenceSource);
@@ -502,7 +536,7 @@ export async function scanReceiptHybrid(params: {
     modelLabel:
       source === 'ON_DEVICE'
         ? 'Gemini Nano Multimodal'
-        : CLOUD_GEMINI_MODEL,
+        : cloudModelUsed,
     latencyMs,
     estimatedCloudCostSavedUsd:
       source === 'ON_DEVICE' ? EST_CLOUD_COST_PER_RECEIPT_USD : 0,
