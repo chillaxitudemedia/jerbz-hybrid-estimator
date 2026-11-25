@@ -181,6 +181,33 @@ function assertCloudAllowedIfNeeded(mode: HybridModeKey) {
   }
 }
 
+async function withTransientRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 2
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      const isTransient =
+        msg.includes('[500') ||
+        msg.includes('[503') ||
+        msg.includes('high demand') ||
+        msg.includes('temporarily');
+      if (!isTransient || attempt === maxRetries) {
+        throw err;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, 1500 * (attempt + 1))
+      );
+    }
+  }
+  throw lastError;
+}
+
 export async function extractJobScopeHybrid(params: {
   notes: string;
   clientName: string;
@@ -223,7 +250,7 @@ export async function extractJobScopeHybrid(params: {
   ].join('\n');
 
   const startedAt = performance.now();
-  const result = await model.generateContent(prompt);
+  const result = await withTransientRetry(() => model.generateContent(prompt));
   const latencyMs = Math.round(performance.now() - startedAt);
 
   const source = mapInferenceSource(result.response.inferenceSource);
@@ -437,7 +464,9 @@ export async function scanReceiptHybrid(params: {
   };
 
   const startedAt = performance.now();
-  const result = await model.generateContent([textPart, imagePart]);
+  const result = await withTransientRetry(() =>
+    model.generateContent([textPart, imagePart])
+  );
   const latencyMs = Math.round(performance.now() - startedAt);
   const source = mapInferenceSource(result.response.inferenceSource);
 
