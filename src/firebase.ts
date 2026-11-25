@@ -29,7 +29,7 @@ export const isFirebaseConfigured = Boolean(
 );
 
 export const CLOUD_GEMINI_MODEL =
-  import.meta.env.VITE_GEMINI_CLOUD_MODEL || 'gemini-2.5-flash';
+  import.meta.env.VITE_GEMINI_CLOUD_MODEL || 'gemini-3.8-flash';
 
 // Even if cloud credentials aren't configured yet, Firebase AI Logic can still
 // initialize a local app shell so ONLY_ON_DEVICE / PREFER_ON_DEVICE on-device
