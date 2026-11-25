@@ -205,7 +205,9 @@ async function runWithCloudModelFallback<T>(
       const isRetryable =
         msg.includes('[500') ||
         msg.includes('[503') ||
+        msg.includes('[429') ||
         msg.includes('[404') ||
+        msg.includes('quota') ||
         msg.includes('high demand') ||
         msg.includes('timed out') ||
         msg.includes('timeout');
@@ -257,7 +259,9 @@ export async function extractJobScopeHybrid(params: {
           generationConfig: {
             responseMimeType: 'application/json',
             responseJsonSchema: JOB_ESTIMATE_JSON_SCHEMA,
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            ...(cloudModelName.includes('3.8')
+              ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+              : {}),
           },
         },
       };
@@ -387,7 +391,9 @@ export async function draftClientQuoteStreamHybrid(params: {
             systemInstruction:
               'You write crisp, trustworthy, SMS/email-ready job quotes for field service contractors. Keep it under 140 words, clear pricing breakdown, polite call to approve.',
             generationConfig: {
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              ...(cloudModelName.includes('3.8')
+              ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+              : {}),
             },
           },
         },
@@ -492,7 +498,9 @@ export async function scanReceiptHybrid(params: {
             generationConfig: {
               responseMimeType: 'application/json',
               responseJsonSchema: RECEIPT_JSON_SCHEMA,
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              ...(cloudModelName.includes('3.8')
+              ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+              : {}),
             },
           },
         },
