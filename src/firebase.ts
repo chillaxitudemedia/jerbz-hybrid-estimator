@@ -3,6 +3,7 @@ import { getAI, GoogleAIBackend, type AI } from 'firebase/ai';
 import {
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
+  ReCaptchaV3Provider,
 } from 'firebase/app-check';
 import {
   initializeFirestore,
@@ -45,16 +46,21 @@ const effectiveConfig = isFirebaseConfigured
 
 export const firebaseApp: FirebaseApp = initializeApp(effectiveConfig);
 
-// Firebase App Check (recommended for production Cloud Gemini protection)
-const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
-if (isFirebaseConfigured && recaptchaSiteKey) {
-  if (import.meta.env.VITE_APPCHECK_DEBUG === 'true') {
+// Firebase App Check (required for Firebase AI Logic basic-enforced projects)
+const recaptchaV3SiteKey = import.meta.env.VITE_RECAPTCHA_V3_SITE_KEY;
+const recaptchaEnterpriseSiteKey =
+  import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
+
+if (isFirebaseConfigured && (recaptchaV3SiteKey || recaptchaEnterpriseSiteKey)) {
+  if (import.meta.env.VITE_APPCHECK_DEBUG === 'true' && location.hostname === 'localhost') {
     (
       self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean }
     ).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
   }
   initializeAppCheck(firebaseApp, {
-    provider: new ReCaptchaEnterpriseProvider(recaptchaSiteKey),
+    provider: recaptchaEnterpriseSiteKey
+      ? new ReCaptchaEnterpriseProvider(recaptchaEnterpriseSiteKey)
+      : new ReCaptchaV3Provider(recaptchaV3SiteKey),
     isTokenAutoRefreshEnabled: true,
   });
 }
