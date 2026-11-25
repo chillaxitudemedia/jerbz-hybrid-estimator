@@ -257,7 +257,7 @@ export async function extractJobScopeHybrid(params: {
           generationConfig: {
             responseMimeType: 'application/json',
             responseJsonSchema: JOB_ESTIMATE_JSON_SCHEMA,
-            thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           },
         },
       };
@@ -387,7 +387,7 @@ export async function draftClientQuoteStreamHybrid(params: {
             systemInstruction:
               'You write crisp, trustworthy, SMS/email-ready job quotes for field service contractors. Keep it under 140 words, clear pricing breakdown, polite call to approve.',
             generationConfig: {
-              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
             },
           },
         },
@@ -492,7 +492,7 @@ export async function scanReceiptHybrid(params: {
             generationConfig: {
               responseMimeType: 'application/json',
               responseJsonSchema: RECEIPT_JSON_SCHEMA,
-              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
             },
           },
         },
